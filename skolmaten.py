@@ -58,7 +58,7 @@ class SkolmatenAPI:
             self.driver.quit()
             self.driver = None
 
-    def _parse_menu_data(self, school_name: str) -> Dict[str, List[str]]:
+    def _parse_menu_data(self, school_name: str) -> List[dict]:
         """
         Parse menu data from the current page
 
@@ -66,9 +66,9 @@ class SkolmatenAPI:
             school_name: Name of the school
 
         Returns:
-            Dictionary with days as keys and menu items as values
+            List of menu entries, each as a dict with keys: items, date, week, day
         """
-        menu_data = {}
+        menu_list = []
         try:
             WebDriverWait(self.driver, 5).until(
                 EC.presence_of_element_located((By.ID, "menu-container"))
@@ -101,20 +101,20 @@ class SkolmatenAPI:
                                     current_date = next_line
                             j += 1
                         if menu_items:
-                            menu_data[week_title + " " + current_day] = {
+                            menu_list.append({
                                 "items": menu_items,
                                 "date": current_date,
                                 "week": week_title.split()[-1],
                                 "day": current_day,
-                            }
+                            })
                         break
         except Exception as e:
             print(f"Error parsing menu data for {school_name}: {e}")
-        return menu_data
+        return menu_list
 
     def get_menu(
         self, school_name: str, also_next_week: bool = False
-    ) -> Dict[str, List[str]]:
+    ) -> List[dict]:
         """
         Fetch lunch menu for a school
 
@@ -123,14 +123,14 @@ class SkolmatenAPI:
             also_next_week: Whether to fetch next week's menu
 
         Returns:
-            Dictionary with days as keys and menu items as values
+            List of menu entries, each as a dict
         """
         url = f"https://skolmaten.se/{school_name}"
         self.driver.get(url)
         WebDriverWait(self.driver, 5).until(
             EC.presence_of_element_located((By.ID, "menu-container"))
         )
-        menu_data = self._parse_menu_data(school_name)
+        menu_list = self._parse_menu_data(school_name)
         if also_next_week:
             selector = "//*[contains(text(), 'Nästa vecka')]"
             try:
@@ -141,15 +141,15 @@ class SkolmatenAPI:
                 WebDriverWait(self.driver, 5).until(
                     EC.presence_of_element_located((By.ID, "menu-container"))
                 )
-                menu_data.update(self._parse_menu_data(school_name))
+                menu_list += self._parse_menu_data(school_name)
             except Exception:
                 pass
-        return menu_data
+        return menu_list
 
 
 def get_school_menu(
     school_name: str, next_week: bool = False, headless: bool = True
-) -> Dict[str, List[str]]:
+) -> List[dict]:
     """
     Convenience function to get school menu
 
@@ -159,7 +159,7 @@ def get_school_menu(
         headless: Whether to run browser in headless mode (default: True)
 
     Returns:
-        Dictionary with days as keys and menu items as values
+        List of menu entries, each as a dict
     """
     with SkolmatenAPI(headless=headless) as api:
         return api.get_menu(school_name, also_next_week=next_week)
