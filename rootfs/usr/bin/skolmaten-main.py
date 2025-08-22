@@ -144,31 +144,53 @@ class SkolmatenAddon:
         
         return None
     
+    def _create_calendar_structure(self, menu_data: List[Dict]) -> Dict[str, List[Dict]]:
+        """Convert menu data to calendar structure organized by week"""
+        calendar = {}
+        
+        for menu_item in menu_data:
+            week = str(menu_item.get('week', 'Unknown'))
+            
+            if week not in calendar:
+                calendar[week] = []
+            
+            calendar[week].append({
+                "weekday": menu_item.get('weekday'),
+                "date": menu_item.get('date'),
+                "week": menu_item.get('week'),
+                "courses": menu_item.get('courses', [])
+            })
+        
+        return calendar
+    
     def _create_sensor_attributes(self, menu_data: List[Dict], current_menu: Optional[Dict]) -> Dict:
         """Create sensor attributes from menu data"""
+        # Create calendar structure organized by week
+        calendar = self._create_calendar_structure(menu_data)
+        
         attributes = {
             "icon": "mdi:food",
             "friendly_name": "School Menu",
             "unit_of_measurement": None,
             "device_class": None,
-            "full_menu": menu_data
+            "calendar": calendar
         }
         
         if current_menu:
             attributes.update({
                 "today_date": current_menu.get('date'),
-                "today_day": current_menu.get('day'),
+                "today_weekday": current_menu.get('weekday'),
                 "today_week": current_menu.get('week'),
-                "today_items": current_menu.get('items', []),
-                "items_count": len(current_menu.get('items', []))
+                "today_courses": current_menu.get('courses', []),
+                "courses_count": len(current_menu.get('courses', []))
             })
         else:
             attributes.update({
                 "today_date": None,
-                "today_day": None,
+                "today_weekday": None,
                 "today_week": None,
-                "today_items": [],
-                "items_count": 0
+                "today_courses": [],
+                "courses_count": 0
             })
         
         return attributes
@@ -201,7 +223,7 @@ class SkolmatenAddon:
                     "friendly_name": f"Menu - {school_name}",
                     "last_updated": datetime.now().isoformat(),
                     "error": str(selenium_error),
-                    "full_menu": []
+                    "calendar": {}
                 }
                 return self.ha_api.create_sensor(entity_id, "Error fetching menu", error_attributes)
             
@@ -213,7 +235,7 @@ class SkolmatenAddon:
                     "icon": "mdi:food-off",
                     "friendly_name": f"Menu - {school_name}",
                     "last_updated": datetime.now().isoformat(),
-                    "full_menu": []
+                    "calendar": {}
                 }
                 return self.ha_api.create_sensor(entity_id, "No menu data available", no_data_attributes)
             
@@ -222,7 +244,7 @@ class SkolmatenAddon:
             
             # Prepare sensor state and attributes
             if current_menu:
-                state = ", ".join(current_menu.get('items', []))[:255]  # Limit state length
+                state = ", ".join(current_menu.get('courses', []))[:255]  # Limit state length
             else:
                 state = "No menu for today"
             
@@ -231,7 +253,7 @@ class SkolmatenAddon:
             
             # Create attributes
             attributes = self._create_sensor_attributes(menu_data, current_menu)
-            attributes['friendly_name'] = f"Menu - {school_name}"
+            attributes['friendly_name'] = school_name
             attributes['last_updated'] = datetime.now().isoformat()
             
             # Update Home Assistant sensor

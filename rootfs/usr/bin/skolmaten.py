@@ -193,13 +193,13 @@ class SkolmatenAPI:
                         
                         if menu_items:
                             menu_entry = {
-                                "items": menu_items,
+                                "weekday": current_day,
                                 "date": current_date,
-                                "week": week_title.split()[-1] if week_title != "Unknown Week" else "Unknown",
-                                "day": current_day,
+                                "week": int(week_title.split()[-1]) if week_title != "Unknown Week" and week_title.split()[-1].isdigit() else None,
+                                "courses": menu_items,
                             }
                             menu_list.append(menu_entry)
-                            logger.info(f"  Created menu entry for {current_day}: {len(menu_items)} items")
+                            logger.info(f"  Created menu entry for {current_day}: {len(menu_items)} courses")
                         else:
                             logger.warning(f"  No menu items found for {current_day}")
                         break
@@ -258,12 +258,30 @@ class SkolmatenAPI:
             
             if also_next_week:
                 logger.info("Attempting to fetch next week's menu...")
-                selector = "//*[contains(text(), 'Nästa vecka')]"
-                try:
-                    next_week_button = WebDriverWait(self.driver, 3).until(
-                        EC.element_to_be_clickable((By.XPATH, selector))
-                    )
-                    logger.info("Found 'Nästa vecka' button, clicking...")
+                # Try both Swedish and English text for next week button
+                selectors = [
+                    "//*[contains(text(), 'Nästa vecka')]",  # Swedish
+                    "//*[contains(text(), 'Next week')]",   # English
+                    "//*[contains(text(), 'nästa vecka')]", # Swedish lowercase
+                    "//*[contains(text(), 'next week')]"    # English lowercase
+                ]
+                
+                next_week_button = None
+                button_text = None
+                
+                for selector in selectors:
+                    try:
+                        next_week_button = WebDriverWait(self.driver, 1).until(
+                            EC.element_to_be_clickable((By.XPATH, selector))
+                        )
+                        button_text = next_week_button.text
+                        logger.info(f"Found next week button with text: '{button_text}'")
+                        break
+                    except:
+                        continue
+                
+                if next_week_button:
+                    logger.info(f"Clicking next week button: '{button_text}'")
                     next_week_button.click()
                     
                     WebDriverWait(self.driver, 5).until(
@@ -275,8 +293,15 @@ class SkolmatenAPI:
                     menu_list += next_week_menu
                     logger.info(f"Next week menu parsed: {len(next_week_menu)} entries")
                     
-                except Exception as e:
-                    logger.warning(f"Could not fetch next week menu: {e}")
+                else:
+                    logger.warning("Could not find next week button in any language (Swedish/English)")
+                    # Log available buttons for debugging
+                    try:
+                        all_buttons = self.driver.find_elements(By.XPATH, "//button | //a | //*[@role='button']")
+                        button_texts = [btn.text.strip() for btn in all_buttons if btn.text.strip()]
+                        logger.info(f"Available clickable elements with text: {button_texts}")
+                    except:
+                        logger.warning("Could not retrieve available buttons for debugging")
             
             logger.info(f"Total menu entries found: {len(menu_list)}")
             return menu_list
