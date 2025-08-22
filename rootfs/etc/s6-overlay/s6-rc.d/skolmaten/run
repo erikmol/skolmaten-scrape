@@ -1,0 +1,44 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Home Assistant Community Add-on: Skolmaten School Menu
+# Runs the Skolmaten menu fetcher
+# ==============================================================================
+
+bashio::log.info "Starting Skolmaten School Menu Add-on..."
+
+# Parse configuration and export as environment variables
+# Use bashio to properly extract the schools array as JSON
+SCHOOLS_COUNT=$(bashio::config 'schools | length')
+SCHOOLS_JSON="["
+
+for (( i=0; i<${SCHOOLS_COUNT}; i++ )); do
+    SCHOOL_NAME=$(bashio::config "schools[${i}].name")
+    SCHOOL_SLUG=$(bashio::config "schools[${i}].slug")
+    
+    if [ $i -gt 0 ]; then
+        SCHOOLS_JSON+=","
+    fi
+    SCHOOLS_JSON+="{\"name\":\"${SCHOOL_NAME}\",\"slug\":\"${SCHOOL_SLUG}\"}"
+done
+
+SCHOOLS_JSON+="]"
+
+export SCHOOLS="${SCHOOLS_JSON}"
+export UPDATE_INTERVAL=$(bashio::config 'update_interval')
+export HEADLESS=$(bashio::config 'headless')
+
+bashio::log.info "Configuration loaded:"
+bashio::log.info "  Schools: ${SCHOOLS}"
+bashio::log.info "  Update interval: ${UPDATE_INTERVAL} seconds"
+bashio::log.info "  Headless mode: ${HEADLESS}"
+
+# Validate configuration
+if bashio::config.is_empty 'schools'; then
+    bashio::log.fatal "No schools configured! Please add at least one school in the add-on configuration."
+    exit 1
+fi
+
+# Start the Python application
+bashio::log.info "Starting Python application..."
+exec /usr/bin/skolmaten-main.py

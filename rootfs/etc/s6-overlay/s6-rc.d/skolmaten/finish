@@ -1,0 +1,14 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Home Assistant Community Add-on: Skolmaten School Menu
+# Cleanup script that runs when the service stops
+# ==============================================================================
+
+bashio::log.info "Skolmaten service is stopping..."
+
+# Kill any remaining Chrome processes
+pkill -f chromium || true
+pkill -f chromedriver || true
+
+bashio::log.info "Skolmaten service stopped."
