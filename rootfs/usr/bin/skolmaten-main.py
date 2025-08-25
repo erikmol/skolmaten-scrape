@@ -105,7 +105,7 @@ class SkolmatenAddon:
         self.ha_api = HomeAssistantAPI()
         self.schools = self._load_config()
         self.update_interval = int(os.environ.get('UPDATE_INTERVAL', 3600))
-        self.headless = os.environ.get('HEADLESS', 'false').lower() == 'true'
+        self.n_weeks = int(os.environ.get('N_WEEKS', 1))
     
     def _load_config(self) -> List[Dict]:
         """Load school configuration"""
@@ -211,8 +211,7 @@ class SkolmatenAddon:
             try:
                 menu_data = get_school_menu(
                     school_slug, 
-                    next_week=True, 
-                    headless=self.headless
+                    n_weeks=self.n_weeks
                 )
             except Exception as selenium_error:
                 logger.error(f"Selenium error for {school_name}: {selenium_error}")
@@ -293,6 +292,7 @@ class SkolmatenAddon:
         logger.info("Starting Skolmaten Add-on")
         logger.info(f"Configured schools: {len(self.schools)}")
         logger.info(f"Update interval: {self.update_interval} seconds")
+        logger.info(f"Number of weeks to fetch: {self.n_weeks}")
         
         # Initial update
         self.update_all_schools()

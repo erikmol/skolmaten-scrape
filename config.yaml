@@ -1,6 +1,6 @@
 ---
 name: Skolmaten School Menu
-version: dev
+version: 0.1.0
 slug: skolmaten_menu
 description: "Fetches school lunch menus from Skolmaten.se and exposes them as Home Assistant sensors"
 url: https://github.com/your-username/skolmaten-hass-addon
@@ -13,13 +13,13 @@ homeassistant_api: true
 hassio_api: true
 options:
   schools:
-    - name: "Hövägens Förskola"
-      slug: "hovagens-forskola"
-  update_interval: 3600
-  headless: false
+    - name: "Östra Real"
+      slug: "ostra-real"
+  update_interval: 7200
+  n_weeks: 2
 schema:
   schools:
     - name: str
       slug: str
-  update_interval: int(60,86400)
-  headless: bool
+  update_interval: int(60,259200)  # 1 minute to 3 days
+  n_weeks: int(1,10)

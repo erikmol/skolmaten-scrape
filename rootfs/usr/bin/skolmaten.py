@@ -22,14 +22,12 @@ logger = logging.getLogger(__name__)
 class SkolmatenAPI:
     """Main class for interacting with Skolmaten.se API"""
 
-    def __init__(self, headless: bool = True):
+    def __init__(self):
         """
         Initialize the Skolmaten API client
-
-        Args:
-            headless: Whether to run browser in headless mode (default: True)
+        
+        Always runs in headless mode for container environments.
         """
-        self.headless = headless
         self.driver = None
 
     def _setup_driver(self) -> webdriver.Chrome:
@@ -218,14 +216,14 @@ class SkolmatenAPI:
         return menu_list
 
     def get_menu(
-        self, school_name: str, also_next_week: bool = False
+        self, school_name: str, n_weeks: int = 1
     ) -> List[dict]:
         """
         Fetch lunch menu for a school
 
         Args:
             school_name: Name of the school (e.g., 'svenstorps-forskola')
-            also_next_week: Whether to fetch next week's menu
+            n_weeks: Number of weeks to fetch (1 = current week, 2 = current + next, etc.)
 
         Returns:
             List of menu entries, each as a dict
@@ -253,11 +251,14 @@ class SkolmatenAPI:
             if "404" in page_title.lower() or "not found" in page_title.lower():
                 logger.warning(f"Possible 404 page detected. Title: '{page_title}'")
             
+            # Start with current week menu
             menu_list = self._parse_menu_data(school_name)
-            logger.info(f"Current week menu parsed: {len(menu_list)} entries")
+            logger.info(f"Week 1 menu parsed: {len(menu_list)} entries")
             
-            if also_next_week:
-                logger.info("Attempting to fetch next week's menu...")
+            # Fetch additional weeks if requested
+            for week_num in range(2, n_weeks + 1):
+                logger.info(f"Attempting to fetch week {week_num} menu...")
+                
                 # Try both Swedish and English text for next week button
                 selectors = [
                     "//*[contains(text(), 'Nästa vecka')]",  # Swedish
@@ -271,7 +272,7 @@ class SkolmatenAPI:
                 
                 for selector in selectors:
                     try:
-                        next_week_button = WebDriverWait(self.driver, 1).until(
+                        next_week_button = WebDriverWait(self.driver, 2).until(
                             EC.element_to_be_clickable((By.XPATH, selector))
                         )
                         button_text = next_week_button.text
@@ -281,20 +282,24 @@ class SkolmatenAPI:
                         continue
                 
                 if next_week_button:
-                    logger.info(f"Clicking next week button: '{button_text}'")
+                    logger.info(f"Clicking next week button for week {week_num}: '{button_text}'")
                     next_week_button.click()
                     
+                    # Wait for page to update
                     WebDriverWait(self.driver, 5).until(
                         EC.presence_of_element_located((By.ID, "menu-container"))
                     )
-                    logger.info("Next week page loaded, parsing...")
+                    # Small delay to ensure content is fully loaded
+                    time.sleep(1)
                     
-                    next_week_menu = self._parse_menu_data(school_name)
-                    menu_list += next_week_menu
-                    logger.info(f"Next week menu parsed: {len(next_week_menu)} entries")
+                    logger.info(f"Week {week_num} page loaded, parsing...")
+                    
+                    week_menu = self._parse_menu_data(school_name)
+                    menu_list += week_menu
+                    logger.info(f"Week {week_num} menu parsed: {len(week_menu)} entries")
                     
                 else:
-                    logger.warning("Could not find next week button in any language (Swedish/English)")
+                    logger.warning(f"Could not find next week button for week {week_num} in any language (Swedish/English)")
                     # Log available buttons for debugging
                     try:
                         all_buttons = self.driver.find_elements(By.XPATH, "//button | //a | //*[@role='button']")
@@ -302,6 +307,10 @@ class SkolmatenAPI:
                         logger.info(f"Available clickable elements with text: {button_texts}")
                     except:
                         logger.warning("Could not retrieve available buttons for debugging")
+                    
+                    # Stop trying if we can't find the button
+                    logger.warning(f"Stopping at week {week_num-1} due to missing next week button")
+                    break
             
             logger.info(f"Total menu entries found: {len(menu_list)}")
             return menu_list
@@ -320,18 +329,17 @@ class SkolmatenAPI:
 
 
 def get_school_menu(
-    school_name: str, next_week: bool = False, headless: bool = True
+    school_name: str, n_weeks: int = 1
 ) -> List[dict]:
     """
     Convenience function to get school menu
 
     Args:
         school_name: Name of the school
-        next_week: Whether to get next week's menu (default: False)
-        headless: Whether to run browser in headless mode (default: True)
+        n_weeks: Number of weeks to fetch (1 = current week, 2 = current + next, etc.)
 
     Returns:
         List of menu entries, each as a dict
     """
-    with SkolmatenAPI(headless=headless) as api:
-        return api.get_menu(school_name, also_next_week=next_week)
+    with SkolmatenAPI() as api:
+        return api.get_menu(school_name, n_weeks=n_weeks)

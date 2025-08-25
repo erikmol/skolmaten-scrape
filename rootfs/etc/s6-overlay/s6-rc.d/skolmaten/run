@@ -26,12 +26,12 @@ SCHOOLS_JSON+="]"
 
 export SCHOOLS="${SCHOOLS_JSON}"
 export UPDATE_INTERVAL=$(bashio::config 'update_interval')
-export HEADLESS=$(bashio::config 'headless')
+export N_WEEKS=$(bashio::config 'n_weeks')
 
 bashio::log.info "Configuration loaded:"
 bashio::log.info "  Schools: ${SCHOOLS}"
 bashio::log.info "  Update interval: ${UPDATE_INTERVAL} seconds"
-bashio::log.info "  Headless mode: ${HEADLESS}"
+bashio::log.info "  Number of weeks: ${N_WEEKS}"
 
 # Validate configuration
 if bashio::config.is_empty 'schools'; then
