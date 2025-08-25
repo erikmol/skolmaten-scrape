@@ -5,6 +5,9 @@ FROM ${BUILD_FROM}
 # Copy root filesystem
 COPY rootfs /
 
+# Set execute permissions
+RUN chmod +x /usr/bin/skolmaten-main.py
+
 # Install Python and Chrome dependencies
 RUN apk add --no-cache \
     python3 \
