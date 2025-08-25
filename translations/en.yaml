@@ -1,0 +1,14 @@
+---
+configuration:
+  schools:
+    name: Schools
+    description: >-
+      List of schools to fetch menus for. Each school must have a name and a slug.
+  update_interval: 
+    name: Update Interval
+    description: >-
+      The interval in seconds at which the add-on fetches new menus from Skolmaten.se.
+  n_weeks:
+    name: Number of Weeks
+    description: >-
+      The number of weeks of menus to fetch from Skolmaten.se. 1 week means only to fetch the current week, 2 weeks means to fetch the current and next week, etc.
