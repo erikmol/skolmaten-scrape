@@ -13,6 +13,18 @@ Personally, one of the most important features is to plan for the upcoming week,
 - Compatible with [skolmat-card](https://github.com/Kaptensanders/skolmat-card)
 - Configurable update interval
 
+
+## Installation
+
+1. Navigate in your Home Assistant frontend to <kbd>Settings</kbd> -> <kbd>Add-ons</kbd> -> <kbd>Add-on Store (Bottom Right)</kbd>.
+2. Click the 3-dots menu at upper right <kbd>...</kbd> > <kbd>Repositories</kbd> and add this repository's URL: [https://github.com/erikmol/skolmaten-scrape](https://github.com/erikmol/skolmaten-scrape)
+3. Reload the page, scroll to the bottom to find the new repository, and click the new add-on named "Skolmaten School Menu".
+
+    Note: Home Assistant loads the repository in the background and the new item won't always show up automatically.  You might need to wait a few seconds and then "hard refesh" the page for it to show up.  On most browser the keyboard shortcut for this is CTRL+F5. If it still doesn't show up, clear your browser's cache and it should then.
+4. Click <kbd>Install</kbd> and give it a few minutes to finish downloading.
+5. Configure your schools in the add-on configuration
+6. Start the add-on
+
 ## Configuration
 - **Schools**:
 ```yaml
@@ -23,6 +35,11 @@ Personally, one of the most important features is to plan for the upcoming week,
 ```
 - **Update interval**: How often to fetch new data in seconds
 - **Number of weeks**: Number of weeks to fetch (1 = current week only, 2 = current + next week, etc.)
+
+## Finding School Slugs
+
+Visit https://skolmaten.se and search for your school. The slug is the last part of the URL.
+Example: `https://skolmaten.se/ostra-real` → slug is `ostra-real`
 
 ## Sensor Data
 
@@ -67,17 +84,6 @@ calendar:
         - "Linsbolognese, spaghetti"
 ```
 
-## Installation
-
-1. Add this repository to your Home Assistant Add-on store
-2. Install the "Skolmaten School Menu" add-on
-3. Configure your schools in the add-on configuration
-4. Start the add-on
-
-## Finding School Slugs
-
-Visit https://skolmaten.se and search for your school. The slug is the last part of the URL.
-Example: `https://skolmaten.se/ostra-real` → slug is `ostra-real`
 
 
 ## Troubleshooting

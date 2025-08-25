@@ -1,9 +1,9 @@
 ---
 name: Skolmaten School Menu
-version: 0.1.0
+version: 0.1.1
 slug: skolmaten_menu
 description: "Fetches school lunch menus from Skolmaten.se and exposes them as Home Assistant sensors"
-url: https://github.com/your-username/skolmaten-hass-addon
+url: https://github.com/erikmol/skolmaten-scrape
 init: false
 arch:
   - aarch64
