@@ -288,26 +288,14 @@ class SkolmatenAddon:
         logger.info("Completed update cycle")
     
     def run(self):
-        """Main run loop"""
-        logger.info("Starting Skolmaten Add-on")
+        """Run once and exit"""
+        logger.info("Running main python script (single execution)")
         logger.info(f"Configured schools: {len(self.schools)}")
-        logger.info(f"Update interval: {self.update_interval} seconds")
         logger.info(f"Number of weeks to fetch: {self.n_weeks}")
         
-        # Initial update
+        # Run update for all schools once
         self.update_all_schools()
-        
-        # Schedule regular updates
-        while True:
-            try:
-                time.sleep(self.update_interval)
-                self.update_all_schools()
-            except KeyboardInterrupt:
-                logger.info("Shutting down...")
-                break
-            except Exception as e:
-                logger.error(f"Error in main loop: {e}")
-                time.sleep(60)  # Wait a minute before retrying
+        logger.info("Single execution completed")
 
 def main():
     """Main entry point"""

@@ -39,6 +39,21 @@ if bashio::config.is_empty 'schools'; then
     exit 1
 fi
 
-# Start the Python application
-bashio::log.info "Starting Python application..."
-exec /usr/bin/skolmaten-main.py
+# Main loop - run Python script periodically
+bashio::log.info "Starting periodic execution loop..."
+
+while true; do
+    bashio::log.info "Running menu update..."
+    
+    # Run the Python script
+    if python3 /usr/bin/skolmaten-main.py; then
+        bashio::log.info "Menu update completed successfully"
+    else
+        exit_code=$?
+        bashio::log.error "Python script failed with exit code: ${exit_code}"
+        # Continue the loop even if one execution fails
+    fi
+    
+    bashio::log.info "Waiting ${UPDATE_INTERVAL} seconds until next update..."
+    sleep "${UPDATE_INTERVAL}"
+done
