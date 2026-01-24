@@ -39,6 +39,10 @@ if bashio::config.is_empty 'schools'; then
     exit 1
 fi
 
+# Wait for Home Assistant to be fully ready before first update
+bashio::log.info "Waiting 60 seconds for Home Assistant to fully initialize..."
+sleep 60
+
 # Main loop - run Python script periodically
 bashio::log.info "Starting periodic execution loop..."
 
