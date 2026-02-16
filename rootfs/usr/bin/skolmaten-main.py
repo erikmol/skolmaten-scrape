@@ -145,54 +145,45 @@ class SkolmatenAddon:
         return None
     
     def _create_calendar_structure(self, menu_data: List[Dict]) -> Dict[str, List[Dict]]:
-        """Convert menu data to calendar structure organized by week"""
+        """Convert menu data to calendar structure organized by date"""
         calendar = {}
-        
+
         for menu_item in menu_data:
-            week = str(menu_item.get('week', 'Unknown'))
-            
-            if week not in calendar:
-                calendar[week] = []
-            
-            calendar[week].append({
-                "weekday": menu_item.get('weekday'),
-                "date": menu_item.get('date'),
-                "week": menu_item.get('week'),
-                "courses": menu_item.get('courses', [])
-            })
-        
+            menu_date = menu_item.get('date')
+            if not menu_date:
+                continue
+
+            courses = menu_item.get('courses', [])
+            dishes = []
+
+            for order, course in enumerate(courses, start=1):
+                dishes.append({
+                    "meal": "Lunch",
+                    "dish": course,
+                    "label": "",
+                    "order": order
+                })
+
+            if dishes:
+                calendar[menu_date] = dishes
+
         return calendar
     
-    def _create_sensor_attributes(self, menu_data: List[Dict], current_menu: Optional[Dict]) -> Dict:
+    def _create_sensor_attributes(self, menu_data: List[Dict], school_slug: str, school_name: str) -> Dict:
         """Create sensor attributes from menu data"""
-        # Create calendar structure organized by week
+        # Create calendar structure organized by date
         calendar = self._create_calendar_structure(menu_data)
-        
+
         attributes = {
+            "provider": "skolmaten.se",
+            "url": f"https://skolmaten.se/{school_slug}",
+            "updated": datetime.now().isoformat(),
+            "calendar": calendar,
+            "name": school_slug,
             "icon": "mdi:food",
-            "friendly_name": "School Menu",
-            "unit_of_measurement": None,
-            "device_class": None,
-            "calendar": calendar
+            "friendly_name": school_name
         }
-        
-        if current_menu:
-            attributes.update({
-                "today_date": current_menu.get('date'),
-                "today_weekday": current_menu.get('weekday'),
-                "today_week": current_menu.get('week'),
-                "today_courses": current_menu.get('courses', []),
-                "courses_count": len(current_menu.get('courses', []))
-            })
-        else:
-            attributes.update({
-                "today_date": None,
-                "today_weekday": None,
-                "today_week": None,
-                "today_courses": [],
-                "courses_count": 0
-            })
-        
+
         return attributes
     
     def update_school_sensor(self, school: Dict):
@@ -240,20 +231,18 @@ class SkolmatenAddon:
             
             # Get today's menu
             current_menu = self._get_current_menu(menu_data)
-            
-            # Prepare sensor state and attributes
+
+            # Prepare sensor state
             if current_menu:
                 state = ", ".join(current_menu.get('courses', []))[:255]  # Limit state length
             else:
                 state = "No menu for today"
-            
+
             # Create sensor entity ID
             entity_id = f"sensor.skolmaten_{school_slug.replace('-', '_')}"
-            
+
             # Create attributes
-            attributes = self._create_sensor_attributes(menu_data, current_menu)
-            attributes['friendly_name'] = school_name
-            attributes['last_updated'] = datetime.now().isoformat()
+            attributes = self._create_sensor_attributes(menu_data, school_slug, school_name)
             
             # Update Home Assistant sensor
             success = self.ha_api.create_sensor(entity_id, state, attributes)
