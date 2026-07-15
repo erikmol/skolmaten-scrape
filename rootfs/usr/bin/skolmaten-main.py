@@ -41,42 +41,51 @@ class HomeAssistantAPI:
         logger.info(f"Authorization header: Bearer {self.supervisor_token[:20] if self.supervisor_token else 'None'}...")
     
     def create_sensor(self, entity_id: str, state: str, attributes: Dict):
-        """Create or update a Home Assistant sensor"""
-        try:
-            data = {
-                "state": state,
-                "attributes": attributes
-            }
-            
-            api_url = f"{self.ha_url}/api/states/{entity_id}"
-            logger.info(f"Attempting to update sensor {entity_id} at URL: {api_url}")
-            logger.info(f"Request data keys: {list(data.keys())}")
-            
-            response = requests.post(
-                api_url,
-                headers=self.headers,
-                json=data,
-                timeout=10
-            )
-            
-            logger.info(f"Response status code: {response.status_code}")
-            
-            if response.status_code == 200 or response.status_code == 201:
-                logger.info(f"Successfully updated sensor {entity_id}")
-                return True
-            else:
-                logger.error(f"Failed to update sensor {entity_id}: {response.status_code}")
-                
+        """Create or update a Home Assistant sensor, with exponential backoff on transient errors"""
+        data = {
+            "state": state,
+            "attributes": attributes
+        }
+
+        api_url = f"{self.ha_url}/api/states/{entity_id}"
+        logger.info(f"Attempting to update sensor {entity_id} at URL: {api_url}")
+        logger.info(f"Request data keys: {list(data.keys())}")
+
+        max_attempts = 8
+        delay = 5  # seconds, doubles each attempt
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.post(
+                    api_url,
+                    headers=self.headers,
+                    json=data,
+                    timeout=10
+                )
+
+                logger.info(f"Response status code: {response.status_code}")
+
+                if response.status_code in (200, 201):
+                    logger.info(f"Successfully updated sensor {entity_id}")
+                    return True
+
                 # Log detailed error information
                 try:
                     response_text = response.text
+                    logger.error(f"Failed to update sensor {entity_id}: {response.status_code}")
                     logger.error(f"Response body: {response_text}")
                     logger.error(f"Response headers: {dict(response.headers)}")
-                except:
+                except Exception:
                     logger.error("Could not retrieve response details")
-                    
-                # Try to get more specific error info
-                if response.status_code == 401:
+
+                if response.status_code in (502, 503, 504):
+                    # Transient error — HA may not be ready yet
+                    if attempt < max_attempts:
+                        logger.warning(f"Transient error ({response.status_code}), retrying in {delay}s (attempt {attempt}/{max_attempts})")
+                        time.sleep(delay)
+                        delay = min(delay * 2, 120)
+                        continue
+                elif response.status_code == 401:
                     logger.error("Authentication failed. Checking token and API endpoint...")
                     logger.error(f"Current token length: {len(self.supervisor_token) if self.supervisor_token else 0}")
                     logger.error(f"Current API URL: {api_url}")
@@ -84,19 +93,23 @@ class HomeAssistantAPI:
                     logger.error("API endpoint not found. May need different URL.")
                 elif response.status_code == 403:
                     logger.error("Forbidden. Add-on may need additional permissions.")
-                    
+
                 return False
-                
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection error updating sensor {entity_id}: {e}")
-            logger.error("This may indicate the Home Assistant API endpoint is unreachable")
-            return False
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Timeout error updating sensor {entity_id}: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"Unexpected error updating sensor {entity_id}: {e}")
-            return False
+
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                logger.error(f"Connection/timeout error updating sensor {entity_id}: {e}")
+                if attempt < max_attempts:
+                    logger.warning(f"Retrying in {delay}s (attempt {attempt}/{max_attempts})")
+                    time.sleep(delay)
+                    delay = min(delay * 2, 120)
+                    continue
+                logger.error("This may indicate the Home Assistant API endpoint is unreachable")
+                return False
+            except Exception as e:
+                logger.error(f"Unexpected error updating sensor {entity_id}: {e}")
+                return False
+
+        return False
 
 class SkolmatenAddon:
     """Main addon class"""
