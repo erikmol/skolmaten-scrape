@@ -111,6 +111,26 @@ class HomeAssistantAPI:
 
         return False
 
+    def get_sensor(self, entity_id: str) -> Optional[Dict]:
+        """Fetch the current state/attributes of a Home Assistant sensor, if it exists"""
+        api_url = f"{self.ha_url}/api/states/{entity_id}"
+
+        try:
+            response = requests.get(api_url, headers=self.headers, timeout=10)
+
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 404:
+                logger.info(f"No existing state found for sensor {entity_id}")
+            else:
+                logger.warning(f"Unexpected status {response.status_code} fetching sensor {entity_id}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.error(f"Connection/timeout error fetching sensor {entity_id}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error fetching sensor {entity_id}: {e}")
+
+        return None
+
 class SkolmatenAddon:
     """Main addon class"""
     
@@ -156,7 +176,16 @@ class SkolmatenAddon:
                 return menu_item
         
         return None
-    
+
+    def _get_previous_calendar(self, entity_id: str) -> Optional[Dict]:
+        """Look up the calendar previously stored for a sensor, if any"""
+        previous_state = self.ha_api.get_sensor(entity_id)
+        if not previous_state:
+            return None
+
+        calendar = previous_state.get('attributes', {}).get('calendar')
+        return calendar or None
+
     def _create_calendar_structure(self, menu_data: List[Dict]) -> Dict[str, List[Dict]]:
         """Convert menu data to calendar structure organized by date"""
         calendar = {}
@@ -219,8 +248,15 @@ class SkolmatenAddon:
                 )
             except Exception as selenium_error:
                 logger.error(f"Selenium error for {school_name}: {selenium_error}")
-                # Create a sensor with error state
                 entity_id = f"sensor.skolmaten_{school_slug.replace('-', '_')}"
+
+                if self._get_previous_calendar(entity_id):
+                    logger.warning(
+                        f"Keeping previous menu data for {school_name} after fetch error"
+                    )
+                    return False
+
+                # No previous data to fall back on, so surface the error state
                 error_attributes = {
                     "icon": "mdi:alert-circle",
                     "friendly_name": f"Menu - {school_name}",
@@ -229,11 +265,18 @@ class SkolmatenAddon:
                     "calendar": {}
                 }
                 return self.ha_api.create_sensor(entity_id, "Error fetching menu", error_attributes)
-            
+
             if not menu_data:
                 logger.warning(f"No menu data found for {school_name}")
-                # Create sensor with no data state
                 entity_id = f"sensor.skolmaten_{school_slug.replace('-', '_')}"
+
+                if self._get_previous_calendar(entity_id):
+                    logger.warning(
+                        f"Keeping previous menu data for {school_name} since fetch returned no data"
+                    )
+                    return False
+
+                # No previous data to fall back on, so surface the no-data state
                 no_data_attributes = {
                     "icon": "mdi:food-off",
                     "friendly_name": f"Menu - {school_name}",
