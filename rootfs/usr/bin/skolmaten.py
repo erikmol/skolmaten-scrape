@@ -28,6 +28,14 @@ _MONTH_ABBR = {
 }
 _DATE_RE = re.compile(r"^([A-Za-zÅÄÖåäö]{3})\.?\s+(\d{1,2})$")
 
+# The "message from the school" campaign banner sometimes follows the last
+# day's dishes inside #menu-container. "campaign" is the Material Symbols
+# icon-font ligature for its announcement icon; once either marker is seen
+# while collecting a day's courses, everything after it belongs to the
+# banner, not the menu.
+_BANNER_MARKERS = ("campaign",)
+_BANNER_HEADING_MARKERS = ("message from the school", "meddelande från skolan")
+
 
 def _resolve_menu_date(text: str) -> Optional[str]:
     """Convert a page date string like 'Sep 14' into an ISO date (YYYY-MM-DD)."""
@@ -216,6 +224,12 @@ class SkolmatenAPI:
                         while j < len(lines):
                             next_line = lines[j].strip()
                             if any(d in next_line.lower() for d in all_days):
+                                break
+                            next_line_lower = next_line.lower()
+                            if next_line_lower in _BANNER_MARKERS or any(
+                                marker in next_line_lower for marker in _BANNER_HEADING_MARKERS
+                            ):
+                                logger.info(f"  Reached school message banner at '{next_line}', stopping")
                                 break
                             if next_line:
                                 resolved_date = _resolve_menu_date(next_line)
