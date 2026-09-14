@@ -28,6 +28,14 @@ _MONTH_ABBR = {
 }
 _DATE_RE = re.compile(r"^([A-Za-zÅÄÖåäö]{3})\.?\s+(\d{1,2})$")
 
+# The "message from the school" campaign banner sometimes follows the last
+# day's dishes inside #menu-container. "campaign" is the Material Symbols
+# icon-font ligature for its announcement icon; once either marker is seen
+# while collecting a day's courses, everything after it belongs to the
+# banner, not the menu.
+_BANNER_MARKERS = ("campaign",)
+_BANNER_HEADING_MARKERS = ("message from the school", "meddelande från skolan")
+
 
 def _resolve_menu_date(text: str) -> Optional[str]:
     """Convert a page date string like 'Sep 14' into an ISO date (YYYY-MM-DD)."""
@@ -177,28 +185,30 @@ class SkolmatenAPI:
             if len(page_text) < 50:  # Suspiciously short
                 logger.warning(f"Menu container text is very short: '{page_text}'")
             
-            # Get week title
-            try:
-                week_title = self.driver.find_element(
-                    By.CSS_SELECTOR, ".text-2xl.font-semibold"
-                ).text
-                logger.info(f"Week title found: '{week_title}'")
-            except Exception as e:
-                logger.warning(f"Could not find week title element: {e}")
-                week_title = "Unknown Week"
-
             # Support both Swedish and English day names
             swedish_days = ["måndag", "tisdag", "onsdag", "torsdag", "fredag"]
             english_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
             all_days = swedish_days + english_days
-            
+
             lines = [line.strip() for line in page_text.split("\n") if line.strip()]
             logger.info(f"Split page text into {len(lines)} lines")
-            
+
             # Log first few lines for debugging
             if lines:
                 logger.info(f"First 5 lines: {lines[:5]}")
-            
+
+            # Get week number. Rather than hunting for the current markup's
+            # (brittle, Tailwind-arbitrary-value) class name, pull it out of
+            # the container text we already have, since "Vecka 38"/"Week 38"
+            # is part of it.
+            week_number = None
+            week_match = re.search(r"(?:vecka|week)\s+(\d+)", page_text, re.IGNORECASE)
+            if week_match:
+                week_number = int(week_match.group(1))
+                logger.info(f"Week title found: week {week_number}")
+            else:
+                logger.warning("Could not find week title in menu container text")
+
             current_day = None
             current_date = None
             
@@ -215,6 +225,12 @@ class SkolmatenAPI:
                             next_line = lines[j].strip()
                             if any(d in next_line.lower() for d in all_days):
                                 break
+                            next_line_lower = next_line.lower()
+                            if next_line_lower in _BANNER_MARKERS or any(
+                                marker in next_line_lower for marker in _BANNER_HEADING_MARKERS
+                            ):
+                                logger.info(f"  Reached school message banner at '{next_line}', stopping")
+                                break
                             if next_line:
                                 resolved_date = _resolve_menu_date(next_line)
                                 if resolved_date:
@@ -229,7 +245,7 @@ class SkolmatenAPI:
                             menu_entry = {
                                 "weekday": current_day,
                                 "date": current_date,
-                                "week": int(week_title.split()[-1]) if week_title != "Unknown Week" and week_title.split()[-1].isdigit() else None,
+                                "week": week_number,
                                 "courses": menu_items,
                             }
                             menu_list.append(menu_entry)
