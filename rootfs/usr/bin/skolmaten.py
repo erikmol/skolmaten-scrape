@@ -177,28 +177,30 @@ class SkolmatenAPI:
             if len(page_text) < 50:  # Suspiciously short
                 logger.warning(f"Menu container text is very short: '{page_text}'")
             
-            # Get week title
-            try:
-                week_title = self.driver.find_element(
-                    By.CSS_SELECTOR, ".text-2xl.font-semibold"
-                ).text
-                logger.info(f"Week title found: '{week_title}'")
-            except Exception as e:
-                logger.warning(f"Could not find week title element: {e}")
-                week_title = "Unknown Week"
-
             # Support both Swedish and English day names
             swedish_days = ["måndag", "tisdag", "onsdag", "torsdag", "fredag"]
             english_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
             all_days = swedish_days + english_days
-            
+
             lines = [line.strip() for line in page_text.split("\n") if line.strip()]
             logger.info(f"Split page text into {len(lines)} lines")
-            
+
             # Log first few lines for debugging
             if lines:
                 logger.info(f"First 5 lines: {lines[:5]}")
-            
+
+            # Get week number. Rather than hunting for the current markup's
+            # (brittle, Tailwind-arbitrary-value) class name, pull it out of
+            # the container text we already have, since "Vecka 38"/"Week 38"
+            # is part of it.
+            week_number = None
+            week_match = re.search(r"(?:vecka|week)\s+(\d+)", page_text, re.IGNORECASE)
+            if week_match:
+                week_number = int(week_match.group(1))
+                logger.info(f"Week title found: week {week_number}")
+            else:
+                logger.warning("Could not find week title in menu container text")
+
             current_day = None
             current_date = None
             
@@ -229,7 +231,7 @@ class SkolmatenAPI:
                             menu_entry = {
                                 "weekday": current_day,
                                 "date": current_date,
-                                "week": int(week_title.split()[-1]) if week_title != "Unknown Week" and week_title.split()[-1].isdigit() else None,
+                                "week": week_number,
                                 "courses": menu_items,
                             }
                             menu_list.append(menu_entry)
