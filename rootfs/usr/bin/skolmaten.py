@@ -5,7 +5,7 @@ A Python library for accessing school lunch menus from Skolmaten.se.
 import time
 import re
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -308,79 +308,39 @@ class SkolmatenAPI:
             menu_list = self._parse_menu_data(school_name)
             logger.info(f"Week 1 menu parsed: {len(menu_list)} entries")
             
-            # Fetch additional weeks if requested
+            # Fetch additional weeks by navigating directly to
+            # ?week=<n>&year=<y>. This is a real page load rather than an
+            # in-app click, so it sidesteps the SPA's async content swap
+            # entirely (see history of this function) — the driver just
+            # loads a fresh document and `presence_of_element_located`
+            # actually means something again.
+            today = datetime.now().date()
             for week_num in range(2, n_weeks + 1):
-                logger.info(f"Attempting to fetch week {week_num} menu...")
-                
-                # Try both Swedish and English text for next week button, and
-                # fall back to the Material Symbols icon-font ligature the
-                # site renders when the button has no text label at all.
-                selectors = [
-                    "//*[contains(text(), 'Nästa vecka')]",  # Swedish
-                    "//*[contains(text(), 'Next week')]",   # English
-                    "//*[contains(text(), 'nästa vecka')]", # Swedish lowercase
-                    "//*[contains(text(), 'next week')]",   # English lowercase
-                    "//*[normalize-space(text())='chevron_right']",  # icon-only button
-                ]
-                
-                next_week_button = None
-                button_text = None
-                
-                for selector in selectors:
-                    try:
-                        next_week_button = WebDriverWait(self.driver, 2).until(
-                            EC.element_to_be_clickable((By.XPATH, selector))
-                        )
-                        button_text = next_week_button.text
-                        logger.info(f"Found next week button with text: '{button_text}'")
-                        break
-                    except:
-                        continue
-                
-                if next_week_button:
-                    logger.info(f"Clicking next week button for week {week_num}: '{button_text}'")
-                    # This is a single-page app: #menu-container is never
-                    # removed from the DOM on click, its contents are just
-                    # replaced in place after an async fetch. So waiting for
-                    # its presence is a no-op (it's already present) and
-                    # tells us nothing about whether the new week has
-                    # loaded yet. Capture the current text and wait for it
-                    # to actually change instead.
-                    previous_text = self.driver.find_element(By.ID, "menu-container").text
-                    next_week_button.click()
+                target_date = today + timedelta(weeks=week_num - 1)
+                target_year, target_week, _ = target_date.isocalendar()
+                week_url = f"https://skolmaten.se/{school_name}?week={target_week}&year={target_year}"
+                logger.info(f"Fetching week {week_num} ({target_year}-W{target_week}): {week_url}")
 
-                    try:
-                        WebDriverWait(self.driver, 10).until(
-                            lambda d: d.find_element(By.ID, "menu-container").text != previous_text
-                        )
-                    except TimeoutException:
-                        logger.warning(
-                            f"Menu container text did not change after clicking next week for week {week_num}; "
-                            "content may be stale"
-                        )
+                self.driver.get(week_url)
 
-                    # Small delay to let the freshly swapped-in content settle
-                    time.sleep(1)
-
-                    logger.info(f"Week {week_num} page loaded, parsing...")
-                    
-                    week_menu = self._parse_menu_data(school_name)
-                    menu_list += week_menu
-                    logger.info(f"Week {week_num} menu parsed: {len(week_menu)} entries")
-                    
-                else:
-                    logger.warning(f"Could not find next week button for week {week_num} in any language (Swedish/English)")
-                    # Log available buttons for debugging
-                    try:
-                        all_buttons = self.driver.find_elements(By.XPATH, "//button | //a | //*[@role='button']")
-                        button_texts = [btn.text.strip() for btn in all_buttons if btn.text.strip()]
-                        logger.info(f"Available clickable elements with text: {button_texts}")
-                    except:
-                        logger.warning("Could not retrieve available buttons for debugging")
-                    
-                    # Stop trying if we can't find the button
-                    logger.warning(f"Stopping at week {week_num-1} due to missing next week button")
+                try:
+                    WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.ID, "menu-container"))
+                    )
+                except TimeoutException:
+                    logger.warning(
+                        f"menu-container not found for week {week_num} at {week_url}; "
+                        f"stopping at week {week_num - 1}"
+                    )
                     break
+
+                if "404" in self.driver.title.lower() or "not found" in self.driver.title.lower():
+                    logger.warning(f"Possible 404 page for week {week_num} at {week_url}; stopping")
+                    break
+
+                week_menu = self._parse_menu_data(school_name)
+                menu_list += week_menu
+                logger.info(f"Week {week_num} menu parsed: {len(week_menu)} entries")
             
             logger.info(f"Total menu entries found: {len(menu_list)}")
             return menu_list
