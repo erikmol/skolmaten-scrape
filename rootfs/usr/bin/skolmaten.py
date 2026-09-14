@@ -295,12 +295,15 @@ class SkolmatenAPI:
             for week_num in range(2, n_weeks + 1):
                 logger.info(f"Attempting to fetch week {week_num} menu...")
                 
-                # Try both Swedish and English text for next week button
+                # Try both Swedish and English text for next week button, and
+                # fall back to the Material Symbols icon-font ligature the
+                # site renders when the button has no text label at all.
                 selectors = [
                     "//*[contains(text(), 'Nästa vecka')]",  # Swedish
                     "//*[contains(text(), 'Next week')]",   # English
                     "//*[contains(text(), 'nästa vecka')]", # Swedish lowercase
-                    "//*[contains(text(), 'next week')]"    # English lowercase
+                    "//*[contains(text(), 'next week')]",   # English lowercase
+                    "//*[normalize-space(text())='chevron_right']",  # icon-only button
                 ]
                 
                 next_week_button = None
