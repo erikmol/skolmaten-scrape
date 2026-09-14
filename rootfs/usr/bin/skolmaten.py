@@ -13,6 +13,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 import os
 
@@ -338,15 +339,29 @@ class SkolmatenAPI:
                 
                 if next_week_button:
                     logger.info(f"Clicking next week button for week {week_num}: '{button_text}'")
+                    # This is a single-page app: #menu-container is never
+                    # removed from the DOM on click, its contents are just
+                    # replaced in place after an async fetch. So waiting for
+                    # its presence is a no-op (it's already present) and
+                    # tells us nothing about whether the new week has
+                    # loaded yet. Capture the current text and wait for it
+                    # to actually change instead.
+                    previous_text = self.driver.find_element(By.ID, "menu-container").text
                     next_week_button.click()
-                    
-                    # Wait for page to update
-                    WebDriverWait(self.driver, 5).until(
-                        EC.presence_of_element_located((By.ID, "menu-container"))
-                    )
-                    # Small delay to ensure content is fully loaded
+
+                    try:
+                        WebDriverWait(self.driver, 10).until(
+                            lambda d: d.find_element(By.ID, "menu-container").text != previous_text
+                        )
+                    except TimeoutException:
+                        logger.warning(
+                            f"Menu container text did not change after clicking next week for week {week_num}; "
+                            "content may be stale"
+                        )
+
+                    # Small delay to let the freshly swapped-in content settle
                     time.sleep(1)
-                    
+
                     logger.info(f"Week {week_num} page loaded, parsing...")
                     
                     week_menu = self._parse_menu_data(school_name)
