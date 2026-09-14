@@ -5,7 +5,8 @@ A Python library for accessing school lunch menus from Skolmaten.se.
 import time
 import re
 import logging
-from typing import List
+from datetime import date, datetime
+from typing import List, Optional
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -17,6 +18,41 @@ import os
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# skolmaten.se renders day headers as an abbreviated month + day, e.g. "Sep 14"
+# (no year), in either English or Swedish depending on locale.
+_MONTH_ABBR = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "maj": 5,
+    "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "okt": 10,
+    "nov": 11, "dec": 12,
+}
+_DATE_RE = re.compile(r"^([A-Za-zÅÄÖåäö]{3})\.?\s+(\d{1,2})$")
+
+
+def _resolve_menu_date(text: str) -> Optional[str]:
+    """Convert a page date string like 'Sep 14' into an ISO date (YYYY-MM-DD)."""
+    match = _DATE_RE.match(text)
+    if not match:
+        return None
+
+    month = _MONTH_ABBR.get(match.group(1).lower())
+    if month is None:
+        return None
+    day = int(match.group(2))
+
+    today = datetime.now().date()
+    try:
+        candidate = date(today.year, month, day)
+    except ValueError:
+        return None
+
+    # The page has no year. If the resulting date looks far in the past,
+    # it's actually next year's date (e.g. fetching a January week in late
+    # December).
+    if (today - candidate).days > 180:
+        candidate = date(today.year + 1, month, day)
+
+    return candidate.isoformat()
 
 
 class SkolmatenAPI:
@@ -179,14 +215,14 @@ class SkolmatenAPI:
                             next_line = lines[j].strip()
                             if any(d in next_line.lower() for d in all_days):
                                 break
-                            if next_line and len(next_line) > 5:
-                                if not re.match(r"^\d{4}-\d{2}-\d{2}$", next_line):
-                                    if "Med reservation" not in next_line:
-                                        menu_items.append(next_line)
-                                        logger.info(f"  Added menu item: '{next_line}'")
-                                else:
-                                    current_date = next_line
-                                    logger.info(f"  Found date: '{current_date}'")
+                            if next_line:
+                                resolved_date = _resolve_menu_date(next_line)
+                                if resolved_date:
+                                    current_date = resolved_date
+                                    logger.info(f"  Found date: '{current_date}' (from '{next_line}')")
+                                elif len(next_line) > 5 and "Med reservation" not in next_line:
+                                    menu_items.append(next_line)
+                                    logger.info(f"  Added menu item: '{next_line}'")
                             j += 1
                         
                         if menu_items:
